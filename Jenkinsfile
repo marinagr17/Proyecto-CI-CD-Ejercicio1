@@ -67,18 +67,29 @@ pipeline {
                         userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
 
                     echo "Construyendo imagen: ${IMAGEN}:${BUILD_NUMBER}"
-                    def newApp = docker.build("${IMAGEN}:${BUILD_NUMBER}", "-f ${DOCKERFILE_PATH} .")
-                    
-                    echo "Validando Django en contenedor..."
-                    docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
-                        dir('app') {
+
+                    if (fileExists('build/Dockerfile')) {
+                        dir('build') {
+                            def newApp = docker.build("${IMAGEN}:${BUILD_NUMBER}", ".")
+                            echo "Validando Django en contenedor..."
+                            docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
+                                sh '''
+                                python3 -c "import django; print('✓ Django', django.get_version())"
+                                '''
+                            }
+                        }
+                    } else if (fileExists('Dockerfile')) {
+                        def newApp = docker.build("${IMAGEN}:${BUILD_NUMBER}", ".")
+                        echo "Validando Django en contenedor..."
+                        docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
                             sh '''
-                            python3 -c "import django; \
-                            print(f'✓ Django {django.get_version()}')"
+                            python3 -c "import django; print('✓ Django', django.get_version())"
                             '''
                         }
+                    } else {
+                        error "No se encontró Dockerfile en 'build/' ni en la raíz. Asegúrate de que el Dockerfile y los recursos (entrypoint.sh, app/) están en el repositorio."
                     }
-                    
+
                     env.NEW_IMAGE = "${IMAGEN}:${BUILD_NUMBER}"
                 }
             }
