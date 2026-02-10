@@ -2,7 +2,7 @@ pipeline {
     agent none
 
     environment {
-        IMAGEN = "marinagr17/DockerCI-CD"
+        IMAGEN = "marinagr17/myapp"
         USUARIO = 'USER_DOCKERHUB'
 
         VERSION_DT = "v4"
@@ -28,21 +28,7 @@ pipeline {
             agent {
                 docker {
                     image 'python:3.12-slim'
-                    args """
-                    -u root:root
-                    -e VERSION_DT=${VERSION_DT}
-                    -e VERSION_MDB=${VERSION_MDB}
-                    -e PUERTO=${PUERTO}
-                    -e DB_HOST=${DB_HOST}
-                    -e DB_NAME=${DB_NAME}
-                    -e DB_USER=${DB_USER}
-                    -e DB_PASSWORD=${DB_PASSWORD}
-                    -e DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
-                    -e DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
-                    -e DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
-                    -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
-                    -e CSRF_TRUSTED_ORIGINS=${CSRF_TRUSTED_ORIGINS}
-                    """
+                    args '-u root:root'
                 }
             }
 
@@ -56,6 +42,12 @@ pipeline {
                     rm -rf /var/lib/apt/lists/*
 
                     pip install -r requirements.txt
+
+                    # Usar SQLite en CI
+                    export DB_ENGINE=django.db.backends.sqlite3
+                    export DB_NAME=":memory:"
+                    export DB_HOST=""
+
                     python3 manage.py test
                     '''
                 }
@@ -70,7 +62,7 @@ pipeline {
 
                     docker.image("$IMAGEN:$BUILD_NUMBER").inside('-u root') {
                         dir('app') {
-                            sh 'python3 manage.py --version || echo "Django container OK"'
+                            sh 'python3 manage.py --version || true'
                         }
                     }
 
