@@ -97,14 +97,35 @@ pipeline {
         
         stage("Push to Docker Hub") {
             agent any
+            when {
+                branch 'master'
+            }
             steps {
                 script {
                     echo "Subiendo imagen a Docker Hub..."
-                    docker.withRegistry('', USUARIO) {
-                        def img = docker.image(env.NEW_IMAGE)
-                        img.push()
-                        img.push('latest')
-                        echo "✓ Imagen subida: ${env.NEW_IMAGE}"
+                    
+                    withCredentials([usernamePassword(
+                        credentialsId: 'USER_DOCKERHUB',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh '''
+                        # Login a Docker Hub
+                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        
+                        # Push imagen con BUILD_NUMBER
+                        docker push ${NEW_IMAGE}
+                        echo "✓ Publicada: ${NEW_IMAGE}"
+                        
+                        # Tag como latest y push
+                        LATEST_TAG=$(echo "${NEW_IMAGE}" | sed 's/:.*/:latest/')
+                        docker tag "${NEW_IMAGE}" "${LATEST_TAG}"
+                        docker push "${LATEST_TAG}"
+                        echo "✓ Publicada: ${LATEST_TAG}"
+                        
+                        # Logout
+                        docker logout
+                        '''
                     }
                 }
             }
@@ -113,12 +134,14 @@ pipeline {
     
     post {
         always {
-            script {
-                sh '''
-                docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
-                docker rmi ${IMAGEN}:latest 2>/dev/null || true
-                '''
-                cleanWs()
+            node('any') {
+                script {
+                    sh '''
+                    docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
+                    docker rmi ${IMAGEN}:latest 2>/dev/null || true
+                    '''
+                    cleanWs()
+                }
             }
         }
         success {
