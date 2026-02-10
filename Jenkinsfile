@@ -15,44 +15,43 @@ pipeline {
     
     stages {
         stage("Test Django") {
-            agent any
+            agent {
+                docker {
+                    image 'python:3.12-slim'
+                    args '-u root:root'
+                }
+            }
             steps {
                 script {
                     echo "Clonando repositorio..."
                     checkout([$class: 'GitSCM', 
                         branches: [[name: '*/master']], 
                         userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
-
-                    echo "Ejecutando tests dentro del contenedor python:3.12-slim"
-                    docker.image('python:3.12-slim').inside('-u root:root') {
-                        dir("${APP_PATH}") {
-                            script {
-                                echo "Contenido de $(pwd):"
-                                sh 'ls -la || true'
-
-                                echo "Instalando dependencias del sistema..."
-                                sh '''
-                                apt-get update && \
-                                apt-get install -y --no-install-recommends \
-                                    gcc \
-                                    default-libmysqlclient-dev \
-                                    build-essential \
-                                    libssl-dev \
-                                    pkg-config && \
-                                rm -rf /var/lib/apt/lists/*
-                                '''
-
-                                echo "Instalando dependencias Python..."
-                                sh 'pip install --quiet -r requirements.txt'
-
-                                echo "Ejecutando tests de Django con SQLite..."
-                                sh '''
-                                python3 manage.py test \
-                                    --settings=django_tutorial.settings_test \
-                                    --verbosity=2
-                                '''
-                            }
-                        }
+                }
+                
+                dir("${APP_PATH}") {
+                    script {
+                        echo "Instalando dependencias del sistema..."
+                        sh '''
+                        apt-get update && \
+                        apt-get install -y --no-install-recommends \
+                            gcc \
+                            default-libmysqlclient-dev \
+                            build-essential \
+                            libssl-dev \
+                            pkg-config && \
+                        rm -rf /var/lib/apt/lists/*
+                        '''
+                        
+                        echo "Instalando dependencias Python..."
+                        sh 'pip install --quiet -r requirements.txt'
+                        
+                        echo "Ejecutando tests de Django con SQLite..."
+                        sh '''
+                        python3 manage.py test \
+                            --settings=django_tutorial.settings_test \
+                            --verbosity=2
+                        '''
                     }
                 }
             }
@@ -99,11 +98,7 @@ pipeline {
         stage("Push to Docker Hub") {
             agent any
             when {
-                expression {
-                    return (env.BRANCH_NAME == 'master') ||
-                           (env.GIT_BRANCH != null && env.GIT_BRANCH.contains('master')) ||
-                           (env.BRANCH == 'master')
-                }
+                branch 'master'
             }
             steps {
                 script {
