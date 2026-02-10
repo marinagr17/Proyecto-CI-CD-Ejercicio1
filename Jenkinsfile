@@ -18,6 +18,12 @@ pipeline {
                 
                 // Entrar al directorio donde está manage.py y requirements.txt
                 dir('build/app') {
+                    sh '''
+                    apt-get update && \
+                    apt-get install -y gcc default-libmysqlclient-dev build-essential libssl-dev pkg-config && \
+                    rm -rf /var/lib/apt/lists/*
+                    '''
+
                     echo "Instalando dependencias..."
                     sh 'pip install -r requirements.txt'
 
