@@ -9,7 +9,7 @@ pipeline {
     environment {
         IMAGEN = "marinagr17/dockercd-cd"
         USUARIO = credentials('USER_DOCKERHUB')
-        DOCKERFILE_PATH = "build"
+        DOCKERFILE_PATH = "build/Dockerfile"
         APP_PATH = "build/app"
     }
     
