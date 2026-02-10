@@ -9,7 +9,7 @@ pipeline {
             agent {
                 docker { 
                     image 'python:3.12-slim'
-                    args '-u root:root'
+                    args '-u root:root --env-file .env.dev'
                 }
             }
             steps {
