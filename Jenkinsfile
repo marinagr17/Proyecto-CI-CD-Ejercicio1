@@ -97,14 +97,18 @@ pipeline {
         
         stage("Push to Docker Hub") {
             agent any
-             steps {
-                 script {
-                     docker.withRegistry( '', USUARIO ) {
-                         newApp.push()
-                     }
-                 }
-             }
-         }
+            steps {
+                script {
+                    echo "Subiendo imagen a Docker Hub..."
+                    docker.withRegistry('', USUARIO) {
+                        def img = docker.image(env.NEW_IMAGE)
+                        img.push()
+                        img.push('latest')
+                        echo "✓ Imagen subida: ${env.NEW_IMAGE}"
+                    }
+                }
+            }
+        }
     }
     
     post {
