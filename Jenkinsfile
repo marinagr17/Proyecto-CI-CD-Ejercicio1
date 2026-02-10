@@ -103,12 +103,10 @@ pipeline {
             steps {
                 script {
                     echo "Subiendo imagen a Docker Hub..."
-                    docker.withRegistry('https://registry.hub.docker.com', USUARIO) {
+                    docker.withRegistry('', USUARIO) {
                         def app = docker.image(env.NEW_IMAGE)
                         app.push()
                         app.push('latest')
-                        echo "✓ Imagen: ${IMAGEN}:${BUILD_NUMBER}"
-                        echo "✓ Imagen: ${IMAGEN}:latest"
                     }
                 }
             }
