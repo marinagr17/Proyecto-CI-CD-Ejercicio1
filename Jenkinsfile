@@ -7,14 +7,13 @@ pipeline {
     }
     
     environment {
-        IMAGEN = "marinagr17/dockercd-cd"
-        USUARIO = credentials('USER_DOCKERHUB')
-        DOCKERFILE_PATH = "build/Dockerfile"
+        IMAGEN = "marinagr17/dockerci-cd"
+        DOCKERFILE_PATH = "build"
         APP_PATH = "build/app"
     }
     
     stages {
-        stage("Test Django") {
+        stage("Checkout & Test Django") {
             agent {
                 docker {
                     image 'python:3.12-slim'
@@ -26,7 +25,15 @@ pipeline {
                     echo "Clonando repositorio..."
                     checkout([$class: 'GitSCM', 
                         branches: [[name: '*/master']], 
-                        userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
+                        userRemoteConfigs: [[url: 'https://github.com/marinagr17/Proyecto-CI-CD-Ejercicio1.git']]])
+                    
+                    // Verificar que todo está
+                    sh '''
+                    echo "✓ Repositorio clonado"
+                    echo ""
+                    echo "Estructura:"
+                    ls -la
+                    '''
                 }
                 
                 dir("${APP_PATH}") {
@@ -46,7 +53,7 @@ pipeline {
                         echo "Instalando dependencias Python..."
                         sh 'pip install --quiet -r requirements.txt'
                         
-                        echo "Ejecutando tests de Django con SQLite..."
+                        echo "Ejecutando tests de Django..."
                         sh '''
                         python3 manage.py test \
                             --settings=django_tutorial.settings_test \
@@ -61,20 +68,32 @@ pipeline {
             agent any
             steps {
                 script {
-                    echo "Construyendo imagen: ${IMAGEN}:${BUILD_NUMBER}"
-                    def newApp = docker.build("${IMAGEN}:${BUILD_NUMBER}", "${DOCKERFILE_PATH}")
+                    def imageTag = "${IMAGEN}:${BUILD_NUMBER}".toLowerCase()
+                    
+                    echo "Construyendo imagen: ${imageTag}"
+                    
+                    // Verificar que Dockerfile existe en el workspace
+                    sh '''
+                    echo "Verificando archivos..."
+                    test -f ${DOCKERFILE_PATH}/Dockerfile && echo "✓ Dockerfile encontrado" || exit 1
+                    test -d ${APP_PATH} && echo "✓ app/ encontrado" || exit 1
+                    ls -lh ${DOCKERFILE_PATH}/
+                    '''
+                    
+                    // Construir imagen - el contexto es "build"
+                    def newApp = docker.build(imageTag, "${DOCKERFILE_PATH}")
                     
                     echo "Validando Django en contenedor..."
-                    docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
+                    docker.image(imageTag).inside('-u root') {
                         dir('app') {
                             sh '''
-                            python3 -c "import django; \
-                            print(f'✓ Django {django.get_version()}')"
+                            python3 -c "import django; print(f'✓ Django {django.get_version()}')"
                             '''
                         }
                     }
                     
-                    env.NEW_IMAGE = "${IMAGEN}:${BUILD_NUMBER}"
+                    env.BUILT_IMAGE = imageTag
+                    echo "✓ Imagen construida: ${imageTag}"
                 }
             }
         }
@@ -87,12 +106,31 @@ pipeline {
             steps {
                 script {
                     echo "Subiendo imagen a Docker Hub..."
-                    docker.withRegistry('https://registry.hub.docker.com', USUARIO) {
-                        def app = docker.image(env.NEW_IMAGE)
-                        app.push()
-                        app.push('latest')
-                        echo "✓ Imagen: ${IMAGEN}:${BUILD_NUMBER}"
-                        echo "✓ Imagen: ${IMAGEN}:latest"
+                    
+                    withCredentials([usernamePassword(
+                        credentialsId: 'USER_DOCKERHUB',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh '''
+                        # Login seguro
+                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+                        
+                        # Push con BUILD_NUMBER
+                        docker push "${BUILT_IMAGE}"
+                        
+                        # Push con latest
+                        LATEST_TAG=$(echo "${BUILT_IMAGE}" | sed 's/:.*/:latest/')
+                        docker tag "${BUILT_IMAGE}" "${LATEST_TAG}"
+                        docker push "${LATEST_TAG}"
+                        
+                        # Logout
+                        docker logout
+                        
+                        echo "✓ Imágenes publicadas:"
+                        echo "  - ${BUILT_IMAGE}"
+                        echo "  - ${LATEST_TAG}"
+                        '''
                     }
                 }
             }
@@ -103,8 +141,8 @@ pipeline {
         always {
             script {
                 sh '''
-                docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
-                docker rmi ${IMAGEN}:latest 2>/dev/null || true
+                docker rmi "${BUILT_IMAGE}" 2>/dev/null || true
+                docker rmi "$(echo "${BUILT_IMAGE}" | sed 's/:.*/:latest/')" 2>/dev/null || true
                 '''
                 cleanWs()
             }
