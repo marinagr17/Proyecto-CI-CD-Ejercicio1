@@ -59,7 +59,7 @@ pipeline {
     
     post {
         always {
-            node {
+            node ('any') {
                 sh '''
                 docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
                 docker rmi ${IMAGEN}:latest 2>/dev/null || true
