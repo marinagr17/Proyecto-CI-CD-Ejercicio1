@@ -9,8 +9,7 @@ pipeline {
     environment {
         IMAGEN = "marinagr17/dockercd-cd"
         USUARIO = credentials('USER_DOCKERHUB')
-        DOCKERFILE_PATH = "build/Dockerfile"
-        APP_PATH = "build/app"
+        REPO = "https://github.com/marinagr17/Guestbook-Tutorial.git"
     }
     
     stages {
@@ -22,85 +21,38 @@ pipeline {
                 }
             }
             steps {
-                script {
-                    echo "Clonando repositorio..."
-                    checkout([$class: 'GitSCM', 
-                        branches: [[name: '*/master']], 
-                        userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
-                }
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: '${REPO}']]])
                 
-                dir("${APP_PATH}") {
-                    script {
-                        echo "Instalando dependencias del sistema..."
-                        sh '''
-                        apt-get update && \
-                        apt-get install -y --no-install-recommends \
-                            gcc \
-                            default-libmysqlclient-dev \
-                            build-essential \
-                            libssl-dev \
-                            pkg-config && \
-                        rm -rf /var/lib/apt/lists/*
-                        '''
-                        
-                        echo "Instalando dependencias Python..."
-                        sh 'pip install --quiet -r requirements.txt'
-                        
-                        echo "Ejecutando tests de Django con SQLite..."
-                        sh '''
-                        python3 manage.py test \
-                            --settings=django_tutorial.settings_test \
-                            --verbosity=2
-                        '''
-                    }
+                dir("build/app") {
+                    sh '''
+                    apt-get update && apt-get install -y --no-install-recommends gcc default-libmysqlclient-dev build-essential libssl-dev pkg-config
+                    pip install --quiet -r requirements.txt
+                    python3 manage.py test --settings=django_tutorial.settings_test --verbosity=2
+                    '''
                 }
             }
         }
         
-        stage("Build Docker Image") {
+        stage("Build & Push") {
             agent any
             steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: '${REPO}']]])
+                
                 script {
-                    echo "Clonando repositorio para build..."
-                    checkout([$class: 'GitSCM', 
-                        branches: [[name: '*/master']], 
-                        userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
-
-                    echo "Construyendo imagen: ${IMAGEN}:${BUILD_NUMBER}"
-
-                    if (fileExists('build/Dockerfile')) {
-                        dir('build') {
-                            def newApp = docker.build("${IMAGEN}:${BUILD_NUMBER}", ".")
-                            echo "Validando Django en contenedor..."
-                            docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
-                                sh '''
-                                python3 -c "import django; print('✓ Django', django.get_version())"
-                                '''
-                            }
-                        }
-                    } else if (fileExists('Dockerfile')) {
-                        def newApp = docker.build("${IMAGEN}:${BUILD_NUMBER}", ".")
-                        echo "Validando Django en contenedor..."
+                    dir('build') {
+                        docker.build("${IMAGEN}:${BUILD_NUMBER}")
                         docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
-                            sh '''
-                            python3 -c "import django; print('✓ Django', django.get_version())"
-                            '''
+                            sh 'python3 -c "import django; print(django.get_version())"'
                         }
-                    } else {
-                        error "No se encontró Dockerfile en 'build/' ni en la raíz. Asegúrate de que el Dockerfile y los recursos (entrypoint.sh, app/) están en el repositorio."
                     }
-
-                    env.NEW_IMAGE = "${IMAGEN}:${BUILD_NUMBER}"
-                }
-            }
-        }
-        
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    docker.withRegistry('', DOCKER_CREDENTIALS) {
-                        sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
-                    }
+                    
+                    sh '''
+                    echo ${USUARIO_PSW} | docker login -u ${USUARIO_USR} --password-stdin
+                    docker push ${IMAGEN}:${BUILD_NUMBER}
+                    docker tag ${IMAGEN}:${BUILD_NUMBER} ${IMAGEN}:latest
+                    docker push ${IMAGEN}:latest
+                    docker logout
+                    '''
                 }
             }
         }
@@ -108,21 +60,11 @@ pipeline {
     
     post {
         always {
-            node('any') {
-                script {
-                    sh '''
-                    docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
-                    docker rmi ${IMAGEN}:latest 2>/dev/null || true
-                    '''
-                    cleanWs()
-                }
-            }
-        }
-        success {
-            echo "Build #${BUILD_NUMBER} completado exitosamente"
-        }
-        failure {
-            echo "Build #${BUILD_NUMBER} falló"
+            sh '''
+            docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
+            docker rmi ${IMAGEN}:latest 2>/dev/null || true
+            '''
+            cleanWs()
         }
     }
 }
