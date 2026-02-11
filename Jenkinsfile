@@ -59,11 +59,13 @@ pipeline {
     
     post {
         always {
-            sh '''
-            docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
-            docker rmi ${IMAGEN}:latest 2>/dev/null || true
-            '''
-            cleanWs()
+            node {
+                sh '''
+                docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
+                docker rmi ${IMAGEN}:latest 2>/dev/null || true
+                '''
+                cleanWs()
+            }                
         }
     }
 }
