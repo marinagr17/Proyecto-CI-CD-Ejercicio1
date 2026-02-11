@@ -95,37 +95,11 @@ pipeline {
             }
         }
         
-        stage("Push to Docker Hub") {
-            agent any
-            when {
-                branch 'master'
-            }
+        stage('Push to Docker Hub') {
             steps {
                 script {
-                    echo "Subiendo imagen a Docker Hub..."
-                    
-                    withCredentials([usernamePassword(
-                        credentialsId: 'USER_DOCKERHUB',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
-                        sh '''
-                        # Login a Docker Hub
-                        echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
-                        
-                        # Push imagen con BUILD_NUMBER
-                        docker push ${NEW_IMAGE}
-                        echo "✓ Publicada: ${NEW_IMAGE}"
-                        
-                        # Tag como latest y push
-                        LATEST_TAG=$(echo "${NEW_IMAGE}" | sed 's/:.*/:latest/')
-                        docker tag "${NEW_IMAGE}" "${LATEST_TAG}"
-                        docker push "${LATEST_TAG}"
-                        echo "✓ Publicada: ${LATEST_TAG}"
-                        
-                        # Logout
-                        docker logout
-                        '''
+                    docker.withRegistry('', DOCKER_CREDENTIALS) {
+                        sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
                     }
                 }
             }
