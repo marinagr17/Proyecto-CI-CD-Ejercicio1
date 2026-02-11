@@ -57,6 +57,7 @@ pipeline {
         }
 
         stage ("Clean up") {
+            agent any
             steps {
                 sh '''
                 docker rmi ${IMAGEN}:${BUILD_NUMBER} 2>/dev/null || true
