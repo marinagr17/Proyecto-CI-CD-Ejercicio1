@@ -7,9 +7,8 @@ pipeline {
     }
     
     environment {
-        IMAGEN = "marinagr17/dockercd-cd"
+        IMAGEN = "marinagr17/dockerci-cd"
         USUARIO = credentials('USER_DOCKERHUB')
-        REPO = "https://github.com/marinagr17/Guestbook-Tutorial.git"
     }
     
     stages {
@@ -21,7 +20,7 @@ pipeline {
                 }
             }
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: '${REPO}']]])
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
                 
                 dir("build/app") {
                     sh '''
@@ -36,7 +35,7 @@ pipeline {
         stage("Build & Push") {
             agent any
             steps {
-                checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: '${REPO}']]])
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
                 
                 script {
                     dir('build') {
