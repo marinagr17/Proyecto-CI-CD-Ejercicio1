@@ -38,7 +38,7 @@ pipeline {
                 checkout([$class: 'GitSCM', branches: [[name: '*/master']], userRemoteConfigs: [[url: 'https://github.com/marinagr17/Guestbook-Tutorial.git']]])
                 
                 script {
-                    dir('builds') {
+                    dir('build') {
                         docker.build("${IMAGEN}:${BUILD_NUMBER}")
                         docker.image("${IMAGEN}:${BUILD_NUMBER}").inside('-u root') {
                             sh 'python3 -c "import django; print(django.get_version())"'
